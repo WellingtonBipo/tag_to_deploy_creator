@@ -125,6 +125,8 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
   }
 
   Future<void> _commitVersion() async {
+    final status = await shell.run('git status');
+    if (!status.outText.contains('Changes not staged for commit')) return;
     stdout.write('Set commit message("$_commitMessage"): ');
     final inputCommit = stdin.readLineSync() ?? '';
     if (inputCommit.isNotEmpty) _commitMessage = inputCommit;
