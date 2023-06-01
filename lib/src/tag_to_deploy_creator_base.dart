@@ -15,11 +15,11 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
   final Shell shell;
   final PubspecInfo pubspecInfo;
 
+  late final Version _versionPubspec;
   Target? _target;
-  Version? _versionPubspec;
   Version? _versionRecommended;
   Version? _versionFromUser;
-  String _commitMessage = 'bump version to deploy';
+  String? _commitMessage;
 
   @override
   Future<void> create() async {
@@ -84,10 +84,10 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
     switch (_target) {
       case Target.release:
         _versionRecommended =
-            _versionPubspec?.plusPatch().copyWith(build: ++build);
+            _versionPubspec.plusPatch().copyWith(build: ++build);
         break;
       case Target.test:
-        _versionRecommended = _versionPubspec?.copyWith(build: ++build);
+        _versionRecommended = _versionPubspec.copyWith(build: ++build);
         break;
       case null:
         throw 'target is null';
@@ -105,7 +105,7 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
   }
 
   void _getVersionFromUser() {
-    stdout.writeln('Current version: ${_versionPubspec?.toStringFormatted()}');
+    stdout.writeln('Current version: ${_versionPubspec.toStringFormatted()}');
     stdout.writeln(
         'Set version to release. (recommended "${_versionRecommended?.toStringFormatted()}", press enter to use recommended)');
 
@@ -113,11 +113,13 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
     if (versionInputted == null) return _getVersionFromUser();
     if (versionInputted.isEmpty) {
       _versionFromUser = _versionRecommended;
+      pubspecInfo.version = _versionFromUser!.toStringFormatted();
       return;
     }
 
     try {
       _versionFromUser = Version.parse(versionInputted);
+      pubspecInfo.version = versionInputted;
     } catch (e) {
       stdout.writeln(e);
       return _getVersionFromUser();
@@ -127,6 +129,7 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
   Future<void> _commitVersion() async {
     final status = await shell.run('git status');
     if (!status.outText.contains('Changes not staged for commit')) return;
+    _commitMessage ??= 'bump version to deploy';
     stdout.write('Set commit message("$_commitMessage"): ');
     final inputCommit = stdin.readLineSync() ?? '';
     if (inputCommit.isNotEmpty) _commitMessage = inputCommit;
@@ -154,15 +157,22 @@ class TagToDeployCreatorBase implements TagToDeployCreator {
       case Target.release:
         return 'v${versionFromUserLocal.toStringFormatted()}';
       case Target.test:
-        return 'hml-$_commitMessage-build-${versionFromUserLocal.build}';
+        final name = _getHMLTagName();
+        return 'hml-$name-build-${versionFromUserLocal.build}';
       case null:
         throw 'target is null';
     }
   }
 
+  String _getHMLTagName() {
+    stdout.write('Set build message(hml-{message}-build-{build_number}): ');
+    final inputName = stdin.readLineSync() ?? '';
+    if (inputName.isEmpty) return _getHMLTagName();
+    return inputName;
+  }
+
   void _setPubspecVersionToOriginal() {
-    final versionFromPubspec = _versionPubspec?.toStringFormatted();
-    if (versionFromPubspec == null) throw 'versionFromPubspec is null';
+    final versionFromPubspec = _versionPubspec.toStringFormatted();
     if (versionFromPubspec == pubspecInfo.version) return;
     pubspecInfo.version = versionFromPubspec;
   }
